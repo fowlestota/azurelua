@@ -41,10 +41,8 @@ enum RESERVED {
   TK_DBCOLON, TK_EOS,
   TK_FLT, TK_INT, TK_NAME, TK_STRING,
 
-  TK_PLUSEQ,
-  TK_MINUSEQ,
-  TK_MULEQ,
-  TK_DIVEQ,
+  /* compound assignments */
+  TK_ADDEQ, TK_SUBEQ, TK_MULEQ, TK_DIVEQ, TK_IDIVEQ, TK_MODEQ, TK_CONCATEQ
 };
 
 /* number of reserved words */

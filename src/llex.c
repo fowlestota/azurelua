@@ -50,7 +50,7 @@ static const char *const luaX_tokens [] = {
     "//", "..", "...", "==", ">=", "<=", "~=",
     "<<", ">>", "::", "<eof>",
     "<number>", "<integer>", "<name>", "<string>",
-    "+=", "-=", "*=", "/=",
+    "+=", "-=", "*=", "/=", "//=", "%=", "..="
 };
 
 
@@ -477,9 +477,9 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         next(ls);
         break;
       }
-      case '-': {  /* '-', '-=', or '--' (comment) */
+      case '-': {  /* '-', '--' (comment), or '-=' */
         next(ls);
-        if (check_next1(ls, '=')) return TK_MINUSEQ; /* Added for -= */
+        if (check_next1(ls, '=')) return TK_SUBEQ; /* Handle '-=' */
         if (ls->current != '-') return '-';
         /* else is a comment */
         next(ls);
@@ -496,16 +496,6 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         while (!currIsNewline(ls) && ls->current != EOZ)
           next(ls);  /* skip until end of line (or end of file) */
         break;
-      }
-      case '+': {
-        next(ls);
-        if (check_next1(ls, '=')) return TK_PLUSEQ;
-        else return '+';
-      }
-      case '*': {
-        next(ls);
-        if (check_next1(ls, '=')) return TK_MULEQ;
-        else return '*';
       }
       case '[': {  /* long string or simply '[' */
         size_t sep = skip_sep(ls);
@@ -534,10 +524,13 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         else if (check_next1(ls, '>')) return TK_SHR;  /* '>>' */
         else return '>';
       }
-      case '/': {
+      case '/': { /* '/', '//', '/=', or '//=' */
         next(ls);
-        if (check_next1(ls, '/')) return TK_IDIV;  /* '//' */
-        else if (check_next1(ls, '=')) return TK_DIVEQ; /* Added for /= */
+        if (check_next1(ls, '/')) {
+          if (check_next1(ls, '=')) return TK_IDIVEQ; /* '//=' */
+          return TK_IDIV;  /* '//' */
+        }
+        if (check_next1(ls, '=')) return TK_DIVEQ; /* '/=' */
         else return '/';
       }
       case '~': {
@@ -554,11 +547,11 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         read_string(ls, ls->current, seminfo);
         return TK_STRING;
       }
-      case '.': {  /* '.', '..', '...', or number */
+      case '.': {  /* '.', '..', '...', '..=', or number */
         save_and_next(ls);
         if (check_next1(ls, '.')) {
-          if (check_next1(ls, '.'))
-            return TK_DOTS;   /* '...' */
+          if (check_next1(ls, '.')) return TK_DOTS;   /* '...' */
+          if (check_next1(ls, '=')) return TK_CONCATEQ; /* '..=' */
           else return TK_CONCAT;   /* '..' */
         }
         else if (!lisdigit(ls->current)) return '.';
@@ -571,6 +564,23 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case EOZ: {
         return TK_EOS;
       }
+
+      case '+': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_ADDEQ;
+        else return '+';
+      }
+      case '*': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_MULEQ;
+        else return '*';
+      }
+      case '%': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_MODEQ;
+        else return '%';
+      }
+
       default: {
         if (lislalpha(ls->current)) {  /* identifier or reserved word? */
           TString *ts;
@@ -587,7 +597,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
             return TK_NAME;
           }
         }
-        else {  /* single-char tokens ('%', '{', '}', ...) */
+        else {  /* single-char tokens ('+', '*', '%', '{', '}', ...) */
           int c = ls->current;
           next(ls);
           return c;

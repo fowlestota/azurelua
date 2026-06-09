@@ -1995,51 +1995,53 @@ static void funcstat (LexState *ls, int line) {
   luaK_fixline(ls->fs, line);  /* definition "happens" in the first line */
 }
 
-static void compound_assignment (LexState *ls, struct LHS_assign *lh) {
-  BinOpr op;
-  int line = ls->linenumber;
-  expdesc e, lhs_copy;
-
-  switch (ls->t.token) {
-    case TK_PLUSEQ: op = OPR_ADD; break;
-    case TK_MINUSEQ: op = OPR_SUB; break;
-    case TK_MULEQ: op = OPR_MUL; break;
-    case TK_DIVEQ: op = OPR_DIV; break;
-    default: luaX_syntaxerror(ls, "unexpected compound operator"); return;
-  }
-  
-  luaX_next(ls);
-
-  check_condition(ls, vkisvar(lh->v.k), "syntax error");
-
-  lhs_copy = lh->v;
-
-  expr(ls, &e);
-
-  luaK_infix(ls->fs, op, &lhs_copy);
-  luaK_posfix(ls->fs, op, &lhs_copy, &e, line);
-
-  luaK_storevar(ls->fs, &lh->v, &lhs_copy);
-}
 
 static void exprstat (LexState *ls) {
-  /* stat -> func | assignment */
   FuncState *fs = ls->fs;
   struct LHS_assign v;
   suffixedexp(ls, &v.v);
-  if (ls->t.token == '=' || ls->t.token == ',') { /* stat -> assignment ? */
+  
+  if (ls->t.token == '=' || ls->t.token == ',') {
     v.prev = NULL;
     restassign(ls, &v, 1);
   }
-  else if (ls->t.token == TK_PLUSEQ || ls->t.token == TK_MINUSEQ || 
-           ls->t.token == TK_MULEQ || ls->t.token == TK_DIVEQ) {
-    compound_assignment(ls, &v);
-  }
-  else {  /* stat -> func */
-    Instruction *inst;
+  else if (ls->t.token >= TK_ADDEQ && ls->t.token <= TK_CONCATEQ) {
+    int op;
+    switch (ls->t.token) {
+      case TK_ADDEQ: op = OPR_ADD; break;
+      case TK_SUBEQ: op = OPR_SUB; break;
+      case TK_MULEQ: op = OPR_MUL; break;
+      case TK_DIVEQ: op = OPR_DIV; break;
+      case TK_IDIVEQ: op = OPR_IDIV; break;
+      case TK_MODEQ: op = OPR_MOD; break;
+      case TK_CONCATEQ: op = OPR_CONCAT; break;
+      default: op = OPR_ADD;
+    }
+    
+    check_condition(ls, vkisvar(v.v.k), "syntax error");
+    check_readonly(ls, &v.v);
+    
+    int line = ls->linenumber;
+    luaX_next(ls);
+
+    luaK_checkstack(fs, 1);
+    fs->freereg++; 
+    
+    expdesc infix = v.v;
+    luaK_exp2nextreg(fs, &infix);
+    
+    fs->freereg = infix.u.info + 1;
+
+    expdesc e;
+    expr(ls, &e);
+
+    luaK_posfix(fs, op, &infix, &e, line);
+
+    luaK_storevar(fs, &v.v, &infix);
+  } 
+  else {
     check_condition(ls, v.v.k == VCALL, "syntax error");
-    inst = &getinstruction(fs, &v.v);
-    SETARG_C(*inst, 1);  /* call statement uses no results */
+    SETARG_C(getinstruction(fs, &v.v), 1);
   }
 }
 
