@@ -1995,6 +1995,32 @@ static void funcstat (LexState *ls, int line) {
   luaK_fixline(ls->fs, line);  /* definition "happens" in the first line */
 }
 
+static void compound_assignment (LexState *ls, struct LHS_assign *lh) {
+  BinOpr op;
+  int line = ls->linenumber;
+  expdesc e, lhs_copy;
+
+  switch (ls->t.token) {
+    case TK_PLUSEQ: op = OPR_ADD; break;
+    case TK_MINUSEQ: op = OPR_SUB; break;
+    case TK_MULEQ: op = OPR_MUL; break;
+    case TK_DIVEQ: op = OPR_DIV; break;
+    default: luaX_syntaxerror(ls, "unexpected compound operator"); return;
+  }
+  
+  luaX_next(ls);
+
+  check_condition(ls, vkisvar(lh->v.k), "syntax error");
+
+  lhs_copy = lh->v;
+
+  expr(ls, &e);
+
+  luaK_infix(ls->fs, op, &lhs_copy);
+  luaK_posfix(ls->fs, op, &lhs_copy, &e, line);
+
+  luaK_storevar(ls->fs, &lh->v, &lhs_copy);
+}
 
 static void exprstat (LexState *ls) {
   /* stat -> func | assignment */
@@ -2004,6 +2030,10 @@ static void exprstat (LexState *ls) {
   if (ls->t.token == '=' || ls->t.token == ',') { /* stat -> assignment ? */
     v.prev = NULL;
     restassign(ls, &v, 1);
+  }
+  else if (ls->t.token == TK_PLUSEQ || ls->t.token == TK_MINUSEQ || 
+           ls->t.token == TK_MULEQ || ls->t.token == TK_DIVEQ) {
+    compound_assignment(ls, &v);
   }
   else {  /* stat -> func */
     Instruction *inst;

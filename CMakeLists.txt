@@ -10,7 +10,7 @@ file(GLOB LUA_HEADERS CONFIGURE_DEPENDS
 )
 
 set(LUA_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/src/lua.c")
-list(REMOVE_ITEM LUA_SOURCES "${LUA_MAIN}")
+list(REMOVE_ITEM LUA_SOURCES "${LUA_MAIN}" "${LUAC_MAIN}")
 
 add_library(azurelua_shared SHARED
     ${LUA_SOURCES}
@@ -28,8 +28,8 @@ set_target_properties(azurelua_shared PROPERTIES
 )
 
 add_library(azurelua_static STATIC
-${LUA_SOURCES}
-${LUA_HEADERS}
+    ${LUA_SOURCES}
+    ${LUA_HEADERS}
 )
 
 target_compile_features(azurelua_static PRIVATE c_std_99)
@@ -39,5 +39,15 @@ target_include_directories(azurelua_static PUBLIC
 )
 
 set_target_properties(azurelua_static PROPERTIES
+    OUTPUT_NAME lua_static
+)
+
+add_executable(lua_exe 
+    ${LUA_MAIN}
+)
+
+target_link_libraries(lua_exe PRIVATE azurelua_static)
+
+set_target_properties(lua_exe PROPERTIES 
     OUTPUT_NAME lua
 )

@@ -49,7 +49,8 @@ static const char *const luaX_tokens [] = {
     "return", "then", "true", "until", "while",
     "//", "..", "...", "==", ">=", "<=", "~=",
     "<<", ">>", "::", "<eof>",
-    "<number>", "<integer>", "<name>", "<string>"
+    "<number>", "<integer>", "<name>", "<string>",
+    "+=", "-=", "*=", "/=",
 };
 
 
@@ -476,8 +477,9 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         next(ls);
         break;
       }
-      case '-': {  /* '-' or '--' (comment) */
+      case '-': {  /* '-', '-=', or '--' (comment) */
         next(ls);
+        if (check_next1(ls, '=')) return TK_MINUSEQ; /* Added for -= */
         if (ls->current != '-') return '-';
         /* else is a comment */
         next(ls);
@@ -494,6 +496,16 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         while (!currIsNewline(ls) && ls->current != EOZ)
           next(ls);  /* skip until end of line (or end of file) */
         break;
+      }
+      case '+': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_PLUSEQ;
+        else return '+';
+      }
+      case '*': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_MULEQ;
+        else return '*';
       }
       case '[': {  /* long string or simply '[' */
         size_t sep = skip_sep(ls);
@@ -525,6 +537,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case '/': {
         next(ls);
         if (check_next1(ls, '/')) return TK_IDIV;  /* '//' */
+        else if (check_next1(ls, '=')) return TK_DIVEQ; /* Added for /= */
         else return '/';
       }
       case '~': {
@@ -574,7 +587,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
             return TK_NAME;
           }
         }
-        else {  /* single-char tokens ('+', '*', '%', '{', '}', ...) */
+        else {  /* single-char tokens ('%', '{', '}', ...) */
           int c = ls->current;
           next(ls);
           return c;
